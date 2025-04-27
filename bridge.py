@@ -72,10 +72,10 @@ def scan_blocks(chain, contract_info="contract_info.json"):
     print(f"Scanning {event_name} on {chain} from {start_block}→{end_block}")
 
     try:
-        entries = Event.getLogs(
-            fromBlock=start_block,
-            toBlock=end_block
-        )
+        entries = Event().get_logs({
+        "from_block": start_block,
+        "to_block":   end_block
+    })
     except Exception:
         entries = []
         for b in range(start_block, end_block + 1):
