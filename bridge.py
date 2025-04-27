@@ -59,7 +59,7 @@ def scan_blocks(chain, contract_info="contract_info.json"):
     w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
     contract = w3.eth.contract(
-        address=web3.utils.toChecksumAddress(addr),
+        address=Web3.to_checksum_address(addr),
         abi=abi
     )
 
