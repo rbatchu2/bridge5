@@ -44,74 +44,70 @@ def scan_blocks(chain, contract_info="contract_info.json"):
         When Deposit events are found on the source chain, call the 'wrap' function the destination chain
         When Unwrap events are found on the destination chain, call the 'withdraw' function on the source chain
     """
-    if chain == 'avax':
-        api_url = f"https://api.avax-test.network/ext/bc/C/rpc"
+    with open(contract_info) as f:
+        info = json.load(f)
+    if chain not in info:
+        raise KeyError(f"{chain!r} not in {contract_info}")
+    addr = info[chain]["address"]
+    abi  = info[chain]["abi"]
 
-    if chain == 'bsc':
-        api_url = f"https://data-seed-prebsc-1-s1.binance.org:8545/"
-
-    if chain in ['avax', 'bsc']:
-        w3 = Web3(Web3.HTTPProvider(api_url))
-        w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+    if chain == "source":
+        rpc = "https://api.avax-test.network/ext/bc/C/rpc"
     else:
-        w3 = Web3(Web3.HTTPProvider(api_url))
+        rpc = "https://data-seed-prebsc-1-s1.binance.org:8545/"
+    w3 = Web3(Web3.HTTPProvider(rpc))
+    w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
-    DEPOSIT_ABI = json.loads('[ { "anonymous": false, "inputs": [ { "indexed": true, "internalType": "address", "name": "token", "type": "address" }, { "indexed": true, "internalType": "address", "name": "recipient", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" } ], "name": "Deposit", "type": "event" }]')
-    contract = w3.eth.contract(address=contract_address, abi=DEPOSIT_ABI)
+    contract = w3.eth.contract(
+        address=w3.toChecksumAddress(addr),
+        abi=abi
+    )
 
-    arg_filter = {}
+    event_name = "Deposit" if chain == "source" else "Unwrap"
+    Event = getattr(contract.events, event_name)
 
-    if start_block == "latest":
-        start_block = w3.eth.get_block_number()
-    if end_block == "latest":
-        end_block = w3.eth.get_block_number()
+    latest      = w3.eth.block_number
+    start_block = max(latest - num_blocks + 1, 0)
+    end_block   = latest
+    print(f"Scanning {event_name} on {chain} from {start_block}→{end_block}")
 
-    if end_block < start_block:
-        print(f"Error end_block < start_block!")
-        print(f"end_block = {end_block}")
-        print(f"start_block = {start_block}")
+    try:
+        entries = Event.getLogs(
+            fromBlock=start_block,
+            toBlock=end_block
+        )
+    except Exception:
+        entries = []
+        for b in range(start_block, end_block + 1):
+            try:
+                filt = Event.createFilter(fromBlock=b, toBlock=b)
+                entries.extend(filt.get_all_entries())
+            except:
+                continue
+
+    rows = []
+    for ev in entries:
+        blk  = ev.blockNumber
+        args = ev.args
+        ts   = w3.eth.get_block(blk)["timestamp"]
+        rows.append({
+            "block":         blk,
+            "token":         args.get("token"),
+            "recipient":     args.get("recipient"),
+            "amount":        args.get("amount"),
+            "timestamp":     datetime.utcfromtimestamp(ts).isoformat(),
+            "transaction":   ev.transactionHash.hex()
+        })
+
+    if not rows:
+        print("No events found.")
         return
 
-    if start_block == end_block:
-        print(f"Scanning block {start_block} on {chain}")
-    else:
-        print(f"Scanning blocks {start_block} - {end_block} on {chain}")
+    df = pd.DataFrame(rows)
+    if eventfile is None:
+        eventfile = f"{chain}_{event_name.lower()}_events.csv"
+    mode   = "a" if Path(eventfile).exists() else "w"
+    header = not Path(eventfile).exists()
+    df.to_csv(eventfile, mode=mode, header=header, index=False)
 
-    event_list = []
-
-    def process_events(events):
-        for event in events:
-            block_number = event.blockNumber
-            token = event.args.token
-            recipient = event.args.recipient
-            amount = event.args.amount
-            timestamp = w3.eth.get_block(block_number)['timestamp']
-            transaction_hash = event.transactionHash.hex()
-            event_list.append({
-                "block_number": block_number,
-                "token": token,
-                "recipient": recipient,
-                "amount": amount,
-                "timestamp": datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S'),
-                "transactionHash": transaction_hash
-            })
-
-    if end_block - start_block < 30:
-        event_filter = contract.events.Deposit.create_filter(from_block=start_block, to_block=end_block, argument_filters=arg_filter)
-        events = event_filter.get_all_entries()
-        process_events(events)
-    else:
-        for block_num in range(start_block, end_block + 1):
-            event_filter = contract.events.Deposit.create_filter(from_block=block_num, to_block=block_num, argument_filters=arg_filter)
-            events = event_filter.get_all_entries()
-            process_events(events)
-
-    if event_list:
-        df = pd.DataFrame(event_list)
-        if Path(eventfile).is_file():
-            df.to_csv(eventfile, mode='a', header=False, index=False)
-        else:
-            df.to_csv(eventfile, mode='w', header=True, index=False)
-        print(f"Successfully saved {len(event_list)} events to {eventfile}")
-    else:
-        print("No events found.")
+    print(f"Saved {len(rows)} {event_name} events to {eventfile}")
