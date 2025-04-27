@@ -44,70 +44,53 @@ def scan_blocks(chain, contract_info="contract_info.json"):
         When Deposit events are found on the source chain, call the 'wrap' function the destination chain
         When Unwrap events are found on the destination chain, call the 'withdraw' function on the source chain
     """
-    with open(contract_info) as f:
-        info = json.load(f)
-    if chain not in info:
-        raise KeyError(f"{chain!r} not in {contract_info}")
-    addr = info[chain]["address"]
-    abi  = info[chain]["abi"]
-
-    if chain == "source":
-        rpc = "https://api.avax-test.network/ext/bc/C/rpc"
-    else:
-        rpc = "https://data-seed-prebsc-1-s1.binance.org:8545/"
-    w3 = Web3(Web3.HTTPProvider(rpc))
+    info       = json.load(open(contract_info))
+    addr       = info[chain]["address"]
+    abi        = info[chain]["abi"]
+    rpc        = (
+        "https://api.avax-test.network/ext/bc/C/rpc"
+        if chain == "source"
+        else "https://data-seed-prebsc-1-s1.binance.org:8545/"
+    )
+    w3         = Web3(Web3.HTTPProvider(rpc))
     w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
-    contract = w3.eth.contract(
-        address=Web3.to_checksum_address(addr),
-        abi=abi
-    )
-
+    contract   = w3.eth.contract(address=w3.to_checksum_address(addr), abi=abi)
     event_name = "Deposit" if chain == "source" else "Unwrap"
-    Event = getattr(contract.events, event_name)
+    Event      = getattr(contract.events, event_name)
 
-    latest      = w3.eth.block_number
-    start_block = max(latest - 5 + 1, 0)
-    end_block   = latest
-    print(f"Scanning {event_name} on {chain} from {start_block}→{end_block}")
+    latest     = w3.eth.block_number
+    start      = max(latest - 5 + 1, 0)
+    end        = latest
+    print(f"Scanning {event_name} on {chain} from {start}→{end}")
 
-    try:
-        entries = Event().get_logs({
-        "from_block": start_block,
-        "to_block":   end_block
+    entries = Event().get_logs({
+        "from_block": start,
+        "to_block":   end,
     })
-    except Exception:
-        entries = []
-        for b in range(start_block, end_block + 1):
-            try:
-                filt = Event.createFilter(fromBlock=b, toBlock=b)
-                entries.extend(filt.get_all_entries())
-            except:
-                continue
 
-    rows = []
-    for ev in entries:
-        blk  = ev.blockNumber
-        args = ev.args
-        ts   = w3.eth.get_block(blk)["timestamp"]
-        rows.append({
-            "block":         blk,
-            "token":         args.get("token"),
-            "recipient":     args.get("recipient"),
-            "amount":        args.get("amount"),
-            "timestamp":     datetime.utcfromtimestamp(ts).isoformat(),
-            "transaction":   ev.transactionHash.hex()
-        })
-
-    if not rows:
+    if not entries:
         print("No events found.")
         return
 
+    rows = []
+    for ev in entries:
+        blk  = ev.block_number
+        args = ev.args
+        ts   = w3.eth.get_block(blk)["timestamp"]
+        rows.append({
+            "block":       blk,
+            "token":       args.token,
+            "recipient":   args.recipient,
+            "amount":      args.amount,
+            "timestamp":   datetime.utcfromtimestamp(ts).isoformat(),
+            "transaction": ev.transaction_hash.hex()
+        })
+
     df = pd.DataFrame(rows)
-    if eventfile is None:
-        eventfile = f"{chain}_{event_name.lower()}_events.csv"
-    mode   = "a" if Path(eventfile).exists() else "w"
-    header = not Path(eventfile).exists()
+    eventfile = f"{chain}_{event_name.lower()}_events.csv"
+    mode      = "a" if Path(eventfile).exists() else "w"
+    header    = not Path(eventfile).exists()
     df.to_csv(eventfile, mode=mode, header=header, index=False)
 
     print(f"Saved {len(rows)} {event_name} events to {eventfile}")
