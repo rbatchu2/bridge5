@@ -86,8 +86,9 @@ def scan_blocks(chain: str, contract_info: str = "contract_info.json") -> None:
     
     if chain == 'source':
         deposit_events = source_contract.events.Deposit.create_filter(
-            fromBlock=source_start_block,
-            toBlock=source_latest_block
+            from_block=source_start_block,
+            to_block=source_latest_block,
+            argument_filters={}
         )
         print("found")
         
