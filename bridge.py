@@ -59,16 +59,16 @@ def scan_blocks(chain: str, contract_info: str = "contract_info.json") -> None:
     w3_source = connect_to('source')
     w3_destination = connect_to('destination')
     
-    source_contract_address = Web3.to_checksum_address(info["source_contract_address"])
+    source_contract_address = Web3.to_checksum_address(info['source']['address'])
     source_contract = w3_source.eth.contract(
         address=source_contract_address,
-        abi=info["source_contract_abi"]
+        abi=info['source']['abi']
     )
     
-    destination_contract_address = Web3.to_checksum_address(info["destination_contract_address"])
+    destination_contract_address = Web3.to_checksum_address(info['destination']['address'])
     destination_contract = w3_destination.eth.contract(
         address=destination_contract_address,
-        abi=info["destination_contract_abi"]
+        abi=info['destination']['abi']
     )
     
     private_key = "0x5fd95ff938a7d2119549e6524e84213e7428cf9e07afc654f73cc1c81007a09b"
