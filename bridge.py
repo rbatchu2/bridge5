@@ -72,7 +72,7 @@ def scan_blocks(chain: str, contract_info: str = "contract_info.json") -> None:
     )
     
     private_key = "0x5fd95ff938a7d2119549e6524e84213e7428cf9e07afc654f73cc1c81007a09b"
-    warden_address = Web3.to_checksum_address(info["0x271eB4B27Ac1D98c76b99aa4923A521d9e673061"])
+    warden_address = Web3.to_checksum_address("0x271eB4B27Ac1D98c76b99aa4923A521d9e673061")
     
     source_latest_block = w3_source.eth.block_number
     destination_latest_block = w3_destination.eth.block_number
@@ -89,6 +89,7 @@ def scan_blocks(chain: str, contract_info: str = "contract_info.json") -> None:
             fromBlock=source_start_block,
             toBlock=source_latest_block
         )
+        print("found")
         
         for event in deposit_events:
             print(f"Found Deposit event: {event}")
