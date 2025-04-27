@@ -46,7 +46,7 @@ def get_contract_info(chain: str, path: str = CONTRACT_INFO_PATH) -> dict:
     return data[chain]
 
 
-def scan_blocks(chain: str) -> int:
+def scan_blocks(chain: str, contract_info) -> int:
     if chain not in ('source', 'destination'):
         raise ValueError("chain must be 'source' or 'destination'")
 
@@ -136,16 +136,3 @@ def scan_blocks(chain: str) -> int:
 
     print(f"\n--- Done. Processed {processed} event(s) on {chain}. ---")
     return processed
-
-
-if __name__ == "__main__":
-    try:
-        src_count  = scan_blocks('source')
-        dst_count  = scan_blocks('destination')
-        print(f"\nAll done: source={src_count}, destination={dst_count}")
-
-    except Exception as e:
-        print("\n✖ ERROR:", e)
-        sys.exit(1)
-
-    print("\n✔ Script finished successfully.")
