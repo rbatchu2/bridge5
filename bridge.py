@@ -92,17 +92,17 @@ def get_contract_info(chain: str, contract_info_path: str = CONTRACT_INFO_PATH) 
 
 
 def scan_blocks(chain: str, contract_info: str = CONTRACT_INFO_PATH) -> int:
-    if chain_to_scan not in ['source', 'destination']:
-        raise ValueError(f"Invalid chain_to_scan: '{chain_to_scan}'. Use 'source' or 'destination'.")
+    if chain not in ['source', 'destination']:
+        raise ValueError(f"Invalid chain: '{chain}'. Use 'source' or 'destination'.")
 
-    print(f"\n--- Starting scan on '{chain_to_scan}' chain ---")
+    print(f"\n--- Starting scan on '{chain}' chain ---")
 
     try:
         w3_source = connect_to('source')
         w3_destination = connect_to('destination')
 
-        source_info = get_contract_info('source', contract_info_path)
-        dest_info = get_contract_info('destination', contract_info_path)
+        source_info = get_contract_info('source', contract_info)
+        dest_info = get_contract_info('destination', contract_info)
 
         source_contract = w3_source.eth.contract(
             address=Web3.to_checksum_address(source_info['address']),
@@ -117,7 +117,7 @@ def scan_blocks(chain: str, contract_info: str = CONTRACT_INFO_PATH) -> int:
         raise
 
     try:
-        if chain_to_scan == 'source':
+        if chain == 'source':
             latest_block = w3_source.eth.block_number
             start_block = max(0, latest_block - BLOCKS_TO_SCAN)
             print(f"Scanning source chain blocks from {start_block} to {latest_block}")
@@ -133,7 +133,7 @@ def scan_blocks(chain: str, contract_info: str = CONTRACT_INFO_PATH) -> int:
 
     # --- Event Scanning and Processing ---
     try:
-        if chain_to_scan == 'source':
+        if chain == 'source':
             # Create a filter for Deposit events
             deposit_event_filter = source_contract.events.Deposit.create_filter(
                 fromBlock=start_block,
@@ -187,7 +187,7 @@ def scan_blocks(chain: str, contract_info: str = CONTRACT_INFO_PATH) -> int:
                     print(f"  ERROR: Failed to send 'wrap' transaction: {e}")
 
 
-        elif chain_to_scan == 'destination':
+        elif chain == 'destination':
             # Fetch Unwrap events using get_logs (alternative to create_filter)
             unwrap_events = destination_contract.events.Unwrap.get_logs(
                 fromBlock=start_block,
@@ -241,7 +241,7 @@ def scan_blocks(chain: str, contract_info: str = CONTRACT_INFO_PATH) -> int:
         # Decide if you want to raise or just log and continue/return
         raise
 
-    print(f"\n--- Scan finished on '{chain_to_scan}' chain. Processed {events_processed} events. ---")
+    print(f"\n--- Scan finished on '{chain}' chain. Processed {events_processed} events. ---")
     return events_processed
 
 # --- Example Usage ---
