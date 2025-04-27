@@ -67,7 +67,7 @@ def scan_blocks(chain, contract_info="contract_info.json"):
     Event = getattr(contract.events, event_name)
 
     latest      = w3.eth.block_number
-    start_block = max(latest - num_blocks + 1, 0)
+    start_block = max(latest - 5 + 1, 0)
     end_block   = latest
     print(f"Scanning {event_name} on {chain} from {start_block}→{end_block}")
 
