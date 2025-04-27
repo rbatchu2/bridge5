@@ -53,7 +53,7 @@ def scan_blocks(chain: str, contract_info_path: str = "contract_info.json") -> N
         print(f"Invalid chain: {chain}")
         return 0
     
-    with open(contract_info.json, "r") as f:
+    with open(contract_info_path, "r") as f:
         info = json.load(f)
     
     w3_source = connect_to('source')
