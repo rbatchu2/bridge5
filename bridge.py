@@ -63,7 +63,7 @@ def scan_blocks(chain, contract_info="contract_info.json"):
         abi=abi
     )
 
-    event_name = "Deposit" if chain == "source" else "Unwrap"
+    event_name = "deposit" if chain == "source" else "unwrap"
     Event = getattr(contract.events, event_name)
 
     latest      = w3.eth.block_number
