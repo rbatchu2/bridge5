@@ -51,11 +51,10 @@ def scan_blocks(chain: str, contract_info) -> int:
         raise ValueError("chain must be 'source' or 'destination'")
 
     print(f"\n--- Scanning {chain} chain for events ---")
-    # 1) Connect to both chains
     w3_src = connect_to('source')
     w3_dst = connect_to('destination')
 
-    # 2) Load contracts
+    # load ABIs & addresses
     src_info = get_contract_info('source')
     dst_info = get_contract_info('destination')
 
@@ -68,71 +67,88 @@ def scan_blocks(chain: str, contract_info) -> int:
         abi=dst_info['abi']
     )
 
-    # 3) Pick which chain/contract to scan
+    # pick chain/contract/event
     if chain == 'source':
         w3_cur, contract, event_name = w3_src, src_contract, 'Deposit'
     else:
         w3_cur, contract, event_name = w3_dst, dst_contract, 'Unwrap'
 
-    # 4) Determine block range
+    Event = getattr(contract.events, event_name)
     latest = w3_cur.eth.block_number
     start  = max(0, latest - BLOCKS_TO_SCAN)
     print(f"> Blocks {start} → {latest}")
 
-    # 5) Fetch logs via unified get_logs()
-    Event = getattr(contract.events, event_name)
-    try:
-        logs = Event.get_logs(from_block=start, to_block=latest)
-    except BlockNotFound:
-        print("Warning: some blocks not found, continuing with what we have…")
-        logs = []
-    except Exception as e:
-        raise RuntimeError(f"Failed to fetch {event_name} logs: {e}")
+    # fetch logs
+    logs = []
+    if chain == 'destination':
+        # batch one block at a time to avoid RPC limits
+        for b in range(start, latest + 1):
+            try:
+                batch = Event.get_logs(from_block=b, to_block=b)
+                if batch:
+                    print(f"  [block {b}] {len(batch)} event(s)")
+                    logs.extend(batch)
+            except Exception as e:
+                print(f"  Warning: could not fetch block {b}: {e}")
+    else:
+        # source is small enough to pull in one go
+        try:
+            logs = Event.get_logs(from_block=start, to_block=latest)
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch {event_name} logs: {e}")
 
-    print(f"> Found {len(logs)} {event_name} event(s)")
+    print(f"> Total {len(logs)} {event_name} event(s) found")
     processed = 0
-
-    # 6) Handle each event
     warden_addr = w3_src.to_checksum_address(WARDEN_ADDRESS_HEX)
+
     for ev in logs:
         print(f"\nEvent in tx {ev.transactionHash.hex()} @ block {ev.blockNumber}")
-        try:
-            args   = ev.args
-            token  = args.token
-            user   = args.user
-            amount = args.amount
-            nonce  = args.nonce
-        except AttributeError as e:
-            print("  Skipping—missing expected args:", e)
+        args = ev.args
+
+        # debug: show exactly what keys we have
+        print("  Raw args keys:", list(args.keys()))
+
+        # token is usually called 'token'
+        token = args.get('token')
+        # try to find the user field under various names
+        user = None
+        for field in ('user','from','to','sender','recipient'):
+            if field in args:
+                user = args[field]
+                break
+
+        if user is None:
+            print("  ERROR: couldn't find a user field—skipping this event.")
             continue
 
-        # Decide wrap vs. withdraw
-        if event_name == 'Deposit':
-            target_w3, target_contract, fn = w3_dst, dst_contract, target_contract.functions.wrap
-            action = 'wrap'
-        else:
-            target_w3, target_contract, fn = w3_src, src_contract, target_contract.functions.withdraw
-            action = 'withdraw'
+        amount = args.get('amount')
+        nonce  = args.get('nonce')
 
-        # Build & send
+        # decide wrap vs withdraw
+        if event_name == 'Deposit':
+            tgt_w3, tgt_contract, fn, action = w3_dst, dst_contract, dst_contract.functions.wrap, 'wrap'
+            fn_args = (token, user, amount, nonce)
+        else:
+            tgt_w3, tgt_contract, fn, action = w3_src, src_contract, src_contract.functions.withdraw, 'withdraw'
+            fn_args = (token, user, amount, nonce)
+
         try:
-            tx = fn(token, user, amount, nonce).build_transaction({
-                'from':      warden_addr,
-                'nonce':     target_w3.eth.get_transaction_count(warden_addr),
-                'chainId':   target_w3.eth.chain_id,
-                'gas':       2_000_000,
-                'gasPrice':  target_w3.eth.gas_price
+            tx = fn(*fn_args).build_transaction({
+                'from':     warden_addr,
+                'nonce':    tgt_w3.eth.get_transaction_count(warden_addr),
+                'chainId':  tgt_w3.eth.chain_id,
+                'gas':      2_000_000,
+                'gasPrice': tgt_w3.eth.gas_price
             })
-            signed = target_w3.eth.account.sign_transaction(tx, PRIVATE_KEY)
-            # ← key fix: in v6 it's .raw_transaction, not .rawTransaction 
-            tx_hash = target_w3.eth.send_raw_transaction(signed.raw_transaction)
-            print(f"  Sent {action} tx: {tx_hash.hex()}")
+            signed = tgt_w3.eth.account.sign_transaction(tx, PRIVATE_KEY)
+            txh = tgt_w3.eth.send_raw_transaction(signed.raw_transaction)
+            print(f"  Sent {action} → {txh.hex()}")
             processed += 1
 
         except ContractLogicError as cle:
-            print("  Contract reverted:", cle)
+            print(f"  Contract reverted on {action}: {cle}")
         except Exception as e:
-            print("  Failed to send tx:", e)
+            print(f"  Failed to send {action}: {e}")
 
     print(f"\n--- Done. Processed {processed} event(s) on {chain}. ---")
     return processed
