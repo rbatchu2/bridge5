@@ -1,6 +1,7 @@
 from web3 import Web3
 from web3.providers.rpc import HTTPProvider
-from web3.middleware import ExtraDataToPOAMiddleware #Necessary for POA chains
+from web3.middleware import ExtraDataToPOAMiddleware
+from pathlib import Path
 from datetime import datetime
 import json
 import pandas as pd
@@ -91,8 +92,8 @@ def scan_blocks(chain, contract_info="contract_info.json"):
                 "token": token,
                 "recipient": recipient,
                 "amount": amount,
-                "timestamp": datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-                "transactionHash": transaction_hash  
+                "timestamp": datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S'),
+                "transactionHash": transaction_hash
             })
 
     if end_block - start_block < 30:
