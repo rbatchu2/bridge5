@@ -136,9 +136,9 @@ def scan_blocks(chain: str, contract_info: str = CONTRACT_INFO_PATH) -> int:
         if chain == 'source':
             # Create a filter for Deposit events
             deposit_event_filter = source_contract.events.Deposit.create_filter(
-                fromBlock=start_block,
-                toBlock=latest_block,
-                argument_filters={} # No specific argument filtering
+                from_block=start_block,
+                to_block=latest_block,
+                argument_filters={} 
             )
 
             # *** FIX: Use get_all_entries() to fetch events from the filter ***
@@ -190,8 +190,8 @@ def scan_blocks(chain: str, contract_info: str = CONTRACT_INFO_PATH) -> int:
         elif chain == 'destination':
             # Fetch Unwrap events using get_logs (alternative to create_filter)
             unwrap_events = destination_contract.events.Unwrap.get_logs(
-                fromBlock=start_block,
-                toBlock=latest_block
+                from_block=start_block,
+                to_block=latest_block
             )
             print(f"Found {len(unwrap_events)} potential Unwrap events in the block range.")
 
