@@ -44,7 +44,7 @@ def get_contract_info(chain: str, contract_info_path: str) -> dict:
     return data[chain]
 
 
-def scan_blocks(chain: str, contract_info_path: str = "contract_info.json") -> None:
+def scan_blocks(chain: str, contract_info: str = "contract_info.json") -> None:
     """
     Scan the last 5 blocks for Deposit (on source) or Unwrap (on destination) events,
     and save any found to a CSV file.
@@ -53,7 +53,7 @@ def scan_blocks(chain: str, contract_info_path: str = "contract_info.json") -> N
         print(f"Invalid chain: {chain}")
         return 0
     
-    with open(contract_info_path, "r") as f:
+    with open(contract_info, "r") as f:
         info = json.load(f)
     
     w3_source = connect_to('source')
