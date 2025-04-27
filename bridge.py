@@ -49,7 +49,7 @@ def scan_blocks(chain: str, contract_info_path: str = "contract_info.json") -> N
     Scan the last 5 blocks for Deposit (on source) or Unwrap (on destination) events,
     and save any found to a CSV file.
     """
-   if chain not in ['source','destination']:
+    if chain not in ['source','destination']:
         print(f"Invalid chain: {chain}")
         return 0
     
@@ -59,7 +59,6 @@ def scan_blocks(chain: str, contract_info_path: str = "contract_info.json") -> N
     w3_source = connect_to('source')
     w3_destination = connect_to('destination')
     
-    # Load source contract
     source_contract_address = Web3.to_checksum_address(info["source_contract_address"])
     source_contract = w3_source.eth.contract(
         address=source_contract_address,
